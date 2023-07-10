@@ -1,0 +1,122 @@
+substitutions:
+  friendly_name: Office Fan
+
+esphome:
+  name: office-fan
+
+esp32:
+  board: wemos_d1_mini32
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Office-Fan Fallback Hotspot"
+    password: !secret ap_ssid_password
+
+web_server:
+  port: 80
+  auth:
+    username: !secret web_server_username
+    password: !secret web_server_password
+
+captive_portal:
+
+# Example configuration entry
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+
+font:
+  # gfonts://family[@weight]
+  - file: "gfonts://Roboto"
+    id: roboto
+    size: 16
+
+
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x64"
+    address: 0x3C
+    lambda: |-
+      if(id(office_fan_obj).state) {
+        it.print(0, 0, id(roboto), "Hello World!");
+        it.printf(0, 16, id(roboto), "Speed: %d%%", id(office_fan_obj).speed);
+        it.printf(0, 32, id(roboto), "RPM: %.0f", id(office_fan_rpm).state);
+      }
+
+binary_sensor:
+  - platform: gpio
+    id: "office_fan_rotary_encoder_button"
+    pin:
+      number: GPIO26
+      mode: INPUT_PULLUP
+      inverted: True
+    on_release:
+      then:
+        - fan.toggle: office_fan_obj
+
+sensor:
+  - platform: rotary_encoder
+    pin_a: GPIO19
+    pin_b: GPIO18
+    id: "office_fan_rotaty_encoder_sensor"
+    on_clockwise:
+      then:
+        lambda: |-
+          auto fan = id(office_fan_obj);
+          int newSpeed = fan->speed + 10;
+          auto call = fan->turn_on();
+          call.set_speed(newSpeed);
+          call.perform();
+    on_anticlockwise:
+      then:
+        lambda: |-
+          auto fan = id(office_fan_obj);
+          int newSpeed = fan->speed - 10;
+          auto call = fan->turn_on();
+          call.set_speed(newSpeed);
+          call.perform();
+
+  - platform: pulse_counter
+    update_interval: 1s
+    pin: 
+      number: GPIO33
+      mode: INPUT_PULLUP
+    unit_of_measurement: 'RPM'
+    id: office_fan_rpm
+    name: $friendly_name RPM
+    accuracy_decimals: 0
+    filters:
+      - multiply: 0.5  # Depending on how many pulses the fan sends per round - should be 0.5 or 1 - try...
+
+output:
+  # Wire this pin (13) into the PWM pin of your 12v fan
+  # ledc is the name of the pwm output system on an esp32
+  - platform: ledc
+    id: office_fan_output
+    pin: GPIO23
+    frequency: "25000 Hz" 
+    min_power: 15%
+    max_power: 100%
+
+fan:
+  - platform: speed
+    output: office_fan_output
+    restore_mode: ALWAYS_ON
+    name: "Office Fan"
+    id: office_fan_obj
