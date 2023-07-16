@@ -3,6 +3,8 @@ substitutions:
 
 esphome:
   name: office-fan
+  includes:
+    - InputTimeout.hpp
 
 esp32:
   board: wemos_d1_mini32
@@ -47,13 +49,19 @@ font:
     id: roboto
     size: 16
 
+custom_component:
+  - lambda: |-
+      auto input_timeout = new InputTimeout(5000);
+      return {input_timeout};
+    components:
+    - id: input_timeout_obj
 
 display:
   - platform: ssd1306_i2c
     model: "SSD1306 128x64"
     address: 0x3C
     lambda: |-
-      if(id(office_fan_obj).state) {
+      if(id(office_fan_obj).state && !((InputTimeout*)id(input_timeout_obj))->get_timeout_has_expired()) {
         it.print(0, 0, id(roboto), "Hello World!");
         it.printf(0, 16, id(roboto), "Speed: %d%%", id(office_fan_obj).speed);
         it.printf(0, 32, id(roboto), "RPM: %.0f", id(office_fan_rpm).state);
@@ -69,6 +77,10 @@ binary_sensor:
     on_release:
       then:
         - fan.toggle: office_fan_obj
+        - lambda: |-
+            auto inputWatcher = (InputTimeout*)id(input_timeout_obj);
+            inputWatcher->touch();
+
 
 sensor:
   - platform: rotary_encoder
@@ -78,14 +90,19 @@ sensor:
     on_clockwise:
       then:
         lambda: |-
+          auto inputWatcher = (InputTimeout*)id(input_timeout_obj);
+          inputWatcher->touch();
           auto fan = id(office_fan_obj);
           int newSpeed = fan->speed + 10;
           auto call = fan->turn_on();
           call.set_speed(newSpeed);
           call.perform();
+
     on_anticlockwise:
       then:
         lambda: |-
+          auto inputWatcher = (InputTimeout*)id(input_timeout_obj);
+          inputWatcher->touch();
           auto fan = id(office_fan_obj);
           int newSpeed = fan->speed - 10;
           auto call = fan->turn_on();
@@ -111,7 +128,7 @@ output:
     id: office_fan_output
     pin: GPIO23
     frequency: "25000 Hz" 
-    min_power: 15%
+    min_power: 0%
     max_power: 100%
 
 fan:
