@@ -3,11 +3,9 @@ substitutions:
 
 esphome:
   name: office-fan
-  includes:
-    - InputTimeout.hpp
 
 esp32:
-  board: wemos_d1_mini32
+  board: esp32-c3-devkitm-1
   framework:
     type: arduino
 
@@ -40,58 +38,36 @@ captive_portal:
 
 # Example configuration entry
 i2c:
-  sda: GPIO21
-  scl: GPIO22
-
-font:
-  # gfonts://family[@weight]
-  - file: "gfonts://Roboto"
-    id: roboto
-    size: 16
-
-custom_component:
-  - lambda: |-
-      auto input_timeout = new InputTimeout(5000);
-      return {input_timeout};
-    components:
-    - id: input_timeout_obj
-
-display:
-  - platform: ssd1306_i2c
-    model: "SSD1306 128x64"
-    address: 0x3C
-    lambda: |-
-      if(id(office_fan_obj).state && !((InputTimeout*)id(input_timeout_obj))->get_timeout_has_expired()) {
-        it.print(0, 0, id(roboto), "Hello World!");
-        it.printf(0, 16, id(roboto), "Speed: %d%%", id(office_fan_obj).speed);
-        it.printf(0, 32, id(roboto), "RPM: %.0f", id(office_fan_rpm).state);
-      }
+  sda: GPIO8
+  scl: GPIO9
 
 binary_sensor:
   - platform: gpio
     id: "office_fan_rotary_encoder_button"
     pin:
-      number: GPIO26
+      number: GPIO7
       mode: INPUT_PULLUP
       inverted: True
     on_release:
       then:
         - fan.toggle: office_fan_obj
-        - lambda: |-
-            auto inputWatcher = (InputTimeout*)id(input_timeout_obj);
-            inputWatcher->touch();
-
 
 sensor:
+  - platform: aht10
+    temperature:
+      name: "Office Temperature"
+      id: "office_temperature"
+    humidity:
+      name: "Office Humidity"
+      id: "office_humidity"
+
   - platform: rotary_encoder
-    pin_a: GPIO19
-    pin_b: GPIO18
+    pin_a: GPIO5
+    pin_b: GPIO6
     id: "office_fan_rotaty_encoder_sensor"
     on_clockwise:
       then:
         lambda: |-
-          auto inputWatcher = (InputTimeout*)id(input_timeout_obj);
-          inputWatcher->touch();
           auto fan = id(office_fan_obj);
           int newSpeed = fan->speed + 10;
           auto call = fan->turn_on();
@@ -101,8 +77,6 @@ sensor:
     on_anticlockwise:
       then:
         lambda: |-
-          auto inputWatcher = (InputTimeout*)id(input_timeout_obj);
-          inputWatcher->touch();
           auto fan = id(office_fan_obj);
           int newSpeed = fan->speed - 10;
           auto call = fan->turn_on();
@@ -112,7 +86,7 @@ sensor:
   - platform: pulse_counter
     update_interval: 1s
     pin: 
-      number: GPIO33
+      number: GPIO4
       mode: INPUT_PULLUP
     unit_of_measurement: 'RPM'
     id: office_fan_rpm
@@ -122,11 +96,9 @@ sensor:
       - multiply: 0.5  # Depending on how many pulses the fan sends per round - should be 0.5 or 1 - try...
 
 output:
-  # Wire this pin (13) into the PWM pin of your 12v fan
-  # ledc is the name of the pwm output system on an esp32
   - platform: ledc
     id: office_fan_output
-    pin: GPIO23
+    pin: GPIO3
     frequency: "25000 Hz" 
     min_power: 0%
     max_power: 100%
@@ -134,6 +106,6 @@ output:
 fan:
   - platform: speed
     output: office_fan_output
-    restore_mode: ALWAYS_ON
+    restore_mode: ALWAYS_OFF
     name: "Office Fan"
     id: office_fan_obj
